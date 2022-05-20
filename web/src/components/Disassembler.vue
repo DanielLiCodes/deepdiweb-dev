@@ -85,7 +85,7 @@
                   <FileInfo />
                 </div>
               </b-tab>
-              <b-tab title="Call Graph">
+              <b-tab lazy title="Call Graph">
                 <div style="position:absolute; top:32px; left:0; right:0; bottom:0; overflow: scroll;">
                   <CallGraph />
                 </div>

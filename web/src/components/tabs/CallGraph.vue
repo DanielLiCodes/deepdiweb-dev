@@ -1,6 +1,7 @@
 <template>
     <div class="graphHolder">
-        <button @click="createGraph">Create Graph</button>
+        <!-- Call graph will be generated on mount, which happens when the tab is clicked -->
+        <!-- <button @click="createGraph">Create Graph</button> -->
         <!-- Click on createGraph when json is added through file input, then it will create the graph -->
     </div>
 </template>
@@ -8,7 +9,6 @@
 import dagreD3 from "dagre-d3"
 import * as d3 from "d3"
 import $ from 'jquery'
-var thisjson = require('./data.json');
 // import { sort } from 'd3'
 export default {
   name: 'CallGraph',
@@ -16,74 +16,61 @@ export default {
     //   json: JSON,
       
   },
+  mounted() {
+        this.createGraph(); //create graph on mount
+        console.log("IN")
+  },
   methods: {
     createGraph() {
 
         let a = this.$store.state.displayUnits;
-        console.log(a)
+        // get all lines of assembly
         //dictionary with key of memory address in int, and assembly code as value
         let dictData = {};
+        //indexes visited already
         let visitedIndexes = new Set();
         //ordered list of the memory address keys
         let dictKeysArray = [];
+        //sorted list of boundaries of functions
         let sortedBoundaries = [];
-        let allCallIDS = [];
+        //dictionary of fucn boundaries, key is start of function, value is end of function
         let funcBoundaries = {};
+        //call graph
         let g = new dagreD3.graphlib.Graph().setGraph({});
         
-        //var keyZero = thisjson['data'][0][0];
-        for(let i = 0; i < a.length; i++){
+        for(let i = 0; i < a.length; i++){ //loop thru all assembly
             if(!a[i]['isCode']){
-                continue;
+                continue; //check if line of assembly is code
             }
-            let temp = a[i];
-            dictData[temp['vma']] = temp['instStr'];
-            if(temp['instStr'].includes("call") && temp['instStr'].slice(5,7) == "0x"){
-                allCallIDS.push(i);
-            }
+             //put current line of assembly in dict, with key of mem address, value of assembly text
+            dictData[a[i]['vma']] = a[i]['instStr'];
             //Sets value to be the assembly code
-            dictKeysArray.push(temp['vma']);
-            //pushes the memory address key to the ordered list
+            dictKeysArray.push(a[i]['vma']);
         }
         //for loop to find all subroutine starts
         for(let i in dictData){
-            if(dictData[i].includes("call") && dictData[i].slice(5,7) == "0x"){
+            if(dictData[i].includes("call") && dictData[i].slice(5,7) == "0x"){ //check for direct call
+                //puts address of call in sortedBoundaries
                 sortedBoundaries.push(Number.parseInt(String(dictData[i].split(" ")[1]), 16));
             }
         }
 
-        
-        // for(let i = 0; i < thisjson['data'].length; i++){
-        //     dictData[thisjson['data'][i][0]] = thisjson['data'][i][2];
-        //     if(thisjson['data'][i][2].includes("call") && thisjson['data'][i][2].slice(5,7) == "0x"){
-        //         allCallIDS.push(i);
-        //     }
-        //     //Sets value to be the assembly code
-        //     dictKeysArray.push(thisjson['data'][i][0]);
-        //     //pushes the memory address key to the ordered list
-        // }
-        // //for loop to find all subroutine starts
-        // for(let i in dictData){
-        //     if(dictData[i].includes("call") && dictData[i].slice(5,7) == "0x"){
-        //         sortedBoundaries.push(Number.parseInt(String(dictData[i].split(" ")[1]), 16));
-        //     }
-        // }
-
-
         //sort subroutine starts
         sortedBoundaries.sort();
-        console.log(sortedBoundaries);
+
         let prev = 0;
         //for loop to make a dictionary of subroutine starts and ends
         for(let i = 0; i < sortedBoundaries.length; i++){
             funcBoundaries[prev] = sortedBoundaries[i];
-            funcBoundaries[sortedBoundaries[i]] = Number.MAX_VALUE;
+            funcBoundaries[sortedBoundaries[i]] = Number.MAX_VALUE; //last end will be Max_value
             prev = sortedBoundaries[i];
         }
 
+        //takes in index of called function for dictKeysArray, returns id of generated Node
         function createRecur(index){ 
             let id = dictKeysArray[index]; //current lineID
-            let loopToo = funcBoundaries[id] ? funcBoundaries[id] : funcBoundaries[0];
+            //find the function boundary in boundaries dict
+            let loopToo = funcBoundaries[id] ? funcBoundaries[id] : funcBoundaries[0]; 
             let nodeText = id+"\n" //text to add to current Node
             g.setNode(
                 id, {label: nodeText} //update current node with id
@@ -92,22 +79,19 @@ export default {
             while(dictData[idNext] && idNext < loopToo){ //while there are still nodes to check, keep looping
                 if(dictData[idNext].includes("call") && dictData[idNext].slice(5,7) == "0x"){ //check if there is a call
                     nodeText+=dictData[idNext]+"\n"; //add the call to the text
-                    // console.log(typedictData[idNext].split(" ")[1]);
-                    
+                    // find index of called function
                     let jumpToIndex = dictKeysArray.findIndex(element => element == Number.parseInt(String(dictData[idNext].split(" ")[1]), 16));
+                    //id of node that will be generated
                     let newNodeID = dictKeysArray[jumpToIndex];
+                    
+                    //check if we have generated it already before
                     if(!visitedIndexes.has(jumpToIndex)){
                         visitedIndexes.add(jumpToIndex);
                         newNodeID = createRecur(jumpToIndex);
                     }  //recursively call createRecur to create the new node
                     g.setEdge(id, newNodeID, {}); //connect current node with new node created
                 }
-                // }else if(dictData[idNext].includes("ret")){ //check if there is a ret
-                //     g.setNode( //issue right now is there are spare ret, as well as ret from non directed calls
-                //         id, {label: nodeText} //update current node text
-                //     )
-                //     return id; //return id so that previous call can make a connection
-                // }
+
                 index++; //increment index
                 idNext = dictKeysArray[index];   //update id
             }
@@ -117,52 +101,55 @@ export default {
             return id; //return id so that previous call can make a connection
         }
 
-
+        //loop through all functions, and generate nodes for them
         for(let i = 0; i < sortedBoundaries.length; i++){
-            let nodeText = sortedBoundaries[i] + '\n';
+            let nodeText = sortedBoundaries[i] + '\n'; //add node text
+            //start index
             let startIndex = dictKeysArray.findIndex(element => element == sortedBoundaries[i]);
+            //where function ends
             let endIndex = dictKeysArray.findIndex(element => element == funcBoundaries[sortedBoundaries[i]]);
             if(visitedIndexes.has(startIndex)){
+                //if we have already visited this in recursion, no need to do it again, continue
                 continue;
-            }else{
-                visitedIndexes.add(startIndex);
             }
+            visitedIndexes.add(startIndex);
+            //generate the node
             g.setNode(
                 sortedBoundaries[i], {label: nodeText}
             )
             
+            //loop through the function to get calls inside of it
             for(let j = startIndex; j < endIndex; j++){
+                //check and see if there is another call
                 let assemblyText = dictData[dictKeysArray[j]];
                 if(assemblyText.includes("call") && assemblyText.slice(5,7) == "0x"){
-                    let calledIndex = dictKeysArray.findIndex(element => element == Number.parseInt(String(assemblyText.split(" ")[1]), 16));
                     nodeText+=assemblyText + "\n";
-                    let returnedNodeId = createRecur(calledIndex);
-                    g.setEdge(sortedBoundaries[i], returnedNodeId, {});
+                    //add text to node, and find index of called function
+                    let calledIndex = dictKeysArray.findIndex(element => element == Number.parseInt(String(assemblyText.split(" ")[1]), 16));
+                    let newNodeID = dictKeysArray[calledIndex];
+                    //check if function node has been generated already, if not, generate it recursively
+                    if(!visitedIndexes.has(calledIndex)){
+                        visitedIndexes.add(calledIndex);
+                        newNodeID = createRecur(calledIndex);
+                    }
+                    //connect called node to current node
+                    g.setEdge(sortedBoundaries[i], newNodeID, {});
                 }
             }
-            
+            //update node text
             g.setNode(
                 sortedBoundaries[i], {label: nodeText}
             )
         }
 
-
-
-
-
-
-
-
-        // createRecur(0);
         console.log("READY TO RENDER")
-        // $('.graphHolder svg').remove();
+        //css here needs help.
         $('.graphHolder').append('<svg class="svg" viewBox="0 0 20000 20000"><g class="nodeGraph"/></svg>');
         var svg = d3.select("svg");
         var inner = svg.select("g");    
         var render = new dagreD3.render();
         render(inner, g);
     },
-    
   }
 }
 </script>
