@@ -1,19 +1,17 @@
 <template>
-    <div class="graphHolder">
+    <div class="graphHolder" id="graphHolder">
         <!-- Call graph will be generated on mount, which happens when the tab is clicked -->
-        <!-- <button @click="createGraph">Create Graph</button> -->
-        <!-- Click on createGraph when json is added through file input, then it will create the graph -->
+
     </div>
 </template>
 <script>
 import dagreD3 from "dagre-d3"
 import * as d3 from "d3"
-import $ from 'jquery'
-// import { sort } from 'd3'
+import {zoom} from "d3-zoom"
+import $ from 'jquery' 
 export default {
   name: 'CallGraph',
   props:{
-    //   json: JSON,
       
   },
   mounted() {
@@ -144,11 +142,35 @@ export default {
 
         console.log("READY TO RENDER")
         //css here needs help.
-        $('.graphHolder').append('<svg class="svg" viewBox="0 0 20000 20000"><g class="nodeGraph"/></svg>');
-        var svg = d3.select("svg");
-        var inner = svg.select("g");    
+        const rect = document.getElementById("graphHolder").getBoundingClientRect();
+        const width = rect.width;
+        const height = rect.height;
+        console.log(width, height);
+
+        //make this height+width the size of the inset of the div
+        const svg = d3
+            .select("#graphHolder")
+            .append('svg')
+            .attr("viewBox", [0, 0, width, height])
+            .attr("overflow-y", "auto")
+            .attr("overflow-x", "auto");
+        const g1 = svg.append("g");
+        console.log(svg)
+        svg.call(d3.zoom()
+            .extent([[0, 0], [width, height]]) 
+            .scaleExtent([0.2, 8])  //scale limits
+            .on("zoom", function () {
+                g1.attr("transform", d3.zoomTransform(this))
+            }))
+
+
+        // function zoomed({transform}) {
+        //     g1.attr("transform", transform);
+        // }
+
         var render = new dagreD3.render();
-        render(inner, g);
+        
+        render(g1, g);
     },
   }
 }
@@ -158,6 +180,12 @@ export default {
         font-weight: 300;
         font-family: "Helvetica Neue", Helvetica, Arial, sans-serf;
         font-size: 14px;
+    }
+    .nodeGraph{
+        z-index:-1;
+        margin-left:0px;
+        height:100%;
+        width:100%;
     }
     .node rect {
         stroke: #999;
@@ -170,11 +198,7 @@ export default {
         stroke-width: 1.5px;
     }
     .graphHolder{
-        width: 8000px;
-        height: 4000px;
-    }
-    .svg{
-        width: 8000px;
-        height: 4000px;
+        width: 100%;
+        height: 100%;
     }
 </style>
