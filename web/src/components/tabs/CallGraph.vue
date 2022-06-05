@@ -1,18 +1,21 @@
 <template>
-    <div class="graphHolder" id="graphHolder">
+    <div class="graphHolder" id="graphHolder"></div>
         <!-- Call graph will be generated on mount, which happens when the tab is clicked -->
 
-    </div>
 </template>
 <script>
 import dagreD3 from "dagre-d3"
 import * as d3 from "d3"
-import {zoom} from "d3-zoom"
 import $ from 'jquery' 
 export default {
   name: 'CallGraph',
   props:{
       
+  },
+  data(){
+      return{
+          graph : []
+      }
   },
   mounted() {
         this.createGraph(); //create graph on mount
@@ -20,7 +23,9 @@ export default {
   },
   methods: {
     createGraph() {
-
+        if(this.graph.length != 0){
+            return;
+        }
         let a = this.$store.state.displayUnits;
         // get all lines of assembly
         //dictionary with key of memory address in int, and assembly code as value
@@ -152,8 +157,8 @@ export default {
             .select("#graphHolder")
             .append('svg')
             .attr("viewBox", [0, 0, width, height])
-            .attr("overflow-y", "auto")
-            .attr("overflow-x", "auto");
+            .attr("overflow-y", "hidden")
+            .attr("overflow-x", "hidden");
         const g1 = svg.append("g");
         console.log(svg)
         svg.call(d3.zoom()
@@ -167,10 +172,12 @@ export default {
         // function zoomed({transform}) {
         //     g1.attr("transform", transform);
         // }
-
         var render = new dagreD3.render();
-        
         render(g1, g);
+
+        // this.graph.push(svg);
+        // this.graph.push(g1);
+        // this.graph.push(g);
     },
   }
 }
